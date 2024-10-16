@@ -1,0 +1,341 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model company {
+  id                 Int       @id @default(autoincrement())
+  name               String    @unique
+  accountsReceivable Int       @default(0)
+  accountsPayable    Int       @default(0)
+  actualPrice        Int       @default(0)
+  actualCost         Int       @default(0)
+  forecastedCost     Int       @default(0)
+  forecastedPrice    Int       @default(0)
+  logoId             Int?
+  startDate          DateTime? @default(now())
+  endDate            DateTime? @default(now())
+
+  logo            media?            @relation(fields: [logoId], references: [id])
+  User            User[]
+  Request         Request[]
+  Item            Item[]
+  InventoryAndPos InventoryAndPos[]
+  Client          Client[]
+  Project         Project[]
+  Invoice         Invoice[]
+  Sale            Sale[]
+  Payment         Payment[]
+  Permission      Permission[]
+  Role            Role[]
+}
+
+model Owner {
+  id          Int    @id @default(autoincrement())
+  email       String @unique
+  password    String
+  fullName    String
+  phonenumber String
+}
+
+model User {
+  id          Int    @id @default(autoincrement())
+  email       String @unique
+  password    String
+  fullName    String
+  phonenumber String
+
+  company   company @relation(fields: [companyId], references: [id])
+  companyId Int
+
+  roleId  Int?
+  role    Role?     @relation(fields: [roleId], references: [id])
+  project Project[]
+}
+
+model media {
+  id            Int             @id @default(autoincrement())
+  name          String
+  url           String
+  type          String
+  extension     String
+  createdAt     DateTime        @default(now())
+  InvoicesMedia InvoicesMedia[]
+  company       company[]
+}
+
+model Role {
+  id          Int          @id @default(autoincrement())
+  roleName    String
+  permissions Permission[]
+  company     company      @relation(fields: [companyId], references: [id])
+  companyId   Int
+  users       User[]
+}
+
+model Permission {
+  id        Int     @id @default(autoincrement())
+  company   company @relation(fields: [companyId], references: [id])
+  companyId Int
+  title     String
+  roles     Role[]
+}
+
+enum ItemsType {
+  SERVICE
+  CLOTHES
+}
+
+model InventoryPosItemRequest {
+  id              Int                  @id @default(autoincrement())
+  quantity        Int                  @db.UnsignedInt
+  specificationId Int
+  price           Float?
+  specification   ClothesSpecification @relation(fields: [specificationId], references: [id])
+  requestId       Int
+  request         Request              @relation(fields: [requestId], references: [id])
+  itemId          Int
+  item            Item                 @relation(fields: [itemId], references: [id])
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  deleted         Boolean              @default(false)
+}
+
+model Request {
+  id                      Int                       @id @default(autoincrement())
+  fromId                  Int
+  from                    InventoryAndPos           @relation(fields: [fromId], references: [id], name: "from")
+  toId                    Int
+  to                      InventoryAndPos           @relation(fields: [toId], references: [id], name: "to")
+  itemId                  Int
+  item                    Item                      @relation(fields: [itemId], references: [id])
+  inventoryPosItemRequest InventoryPosItemRequest[]
+  company                 company                   @relation(fields: [companyId], references: [id])
+  companyId               Int
+  createdAt               DateTime                  @default(now())
+  updatedAt               DateTime                  @updatedAt
+  deleted                 Boolean                   @default(false)
+}
+
+model Item {
+  id                      Int                       @id @default(autoincrement())
+  type                    ItemsType
+  name                    String
+  description             String
+  cost                    Float
+  specifications          ClothesSpecification[]
+  company                 company                   @relation(fields: [companyId], references: [id])
+  companyId               Int
+  deleted                 Boolean                   @default(false)
+  createdAt               DateTime                  @default(now())
+  updatedAt               DateTime                  @updatedAt
+  InventoryPosItems       InventoryPosItems[]
+  Sale                    Sale[]
+  requests                Request[]
+  inventoryPosItemRequest InventoryPosItemRequest[]
+
+  @@map("items")
+}
+
+model ClothesSpecification {
+  id                 Int                       @id @default(autoincrement())
+  colorName          String
+  size               String
+  itemId             Int
+  item               Item                      @relation(fields: [itemId], references: [id])
+  InventoryPosItems  InventoryPosItems[]
+  saleSpecifications SaleSpecification[]
+  requests           InventoryPosItemRequest[]
+
+  @@map("clothes_specifications")
+}
+
+enum EntityType {
+  INVENTORY
+  POS
+}
+
+model InventoryAndPos {
+  id                Int                      @id @default(autoincrement())
+  name              String
+  address           String
+  type              EntityType
+  totalQuantity     Int                      @default(0) @db.UnsignedInt
+  deleted           Boolean                  @default(false)
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+  totalSales        Int                      @default(0)
+  company           company                  @relation(fields: [companyId], references: [id])
+  companyId         Int
+  InventoryPosItems InventoryPosItems[]
+  posHas            InventoriesBelongToPos[] @relation("pos")
+  inventoryBelong   InventoriesBelongToPos[] @relation("inventory")
+  Sale              Sale[]
+  requestsTo        Request[]                @relation("to")
+  requestsFrom      Request[]                @relation("from")
+
+  @@map("inventories_and_pos")
+}
+
+model InventoriesBelongToPos {
+  id          Int             @id @default(autoincrement())
+  posId       Int
+  pos         InventoryAndPos @relation(fields: [posId], references: [id], name: "pos")
+  inventoryId Int
+  inventory   InventoryAndPos @relation(fields: [inventoryId], references: [id], name: "inventory")
+}
+
+model InventoryPosItems {
+  id               Int                  @id @default(autoincrement())
+  quantity         Int                  @db.UnsignedInt
+  price            Float?
+  inventoryOrPosId Int
+  itemId           Int
+  specificationId  Int
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  item             Item                 @relation(fields: [itemId], references: [id])
+  specification    ClothesSpecification @relation(fields: [specificationId], references: [id])
+  inventoryOrPos   InventoryAndPos      @relation(fields: [inventoryOrPosId], references: [id])
+
+  @@map("inventory_pos_itmes")
+}
+
+model Client {
+  id        Int       @id @default(autoincrement())
+  project   Project[]
+  fullName  String
+  email     String    @unique
+  phone     String
+  company   company   @relation(fields: [companyId], references: [id])
+  companyId Int
+  deleted   Boolean   @default(false)
+  Invoices  Invoice[]
+}
+
+model Project {
+  id                 Int       @id @default(autoincrement())
+  title              String
+  forecastedCost     Int
+  actualCost         Int       @default(0)
+  forecastedPrice    Int
+  actualPrice        Int       @default(0)
+  startDate          DateTime
+  endDate            DateTime
+  netProfit          Int       @default(0)
+  accountsPayable    Int       @default(0)
+  company            company   @relation(fields: [companyId], references: [id])
+  companyId          Int
+  accountsReceivable Int       @default(0)
+  clientId           Int
+  client             Client    @relation(fields: [clientId], references: [id])
+  ownerId            Int?
+  owner              User?     @relation(fields: [ownerId], references: [id])
+  deleted            Boolean   @default(false)
+  invoices           Invoice[]
+}
+
+enum InvoiceType {
+  RECEIVED
+  SENT
+}
+
+enum InvoiceStatus {
+  PENDING
+  PAID
+}
+
+model Invoice {
+  id              Int           @id @default(autoincrement())
+  serialNumber    String        @unique
+  clientId        Int
+  projectId       Int?
+  dueDate         DateTime
+  company         company       @relation(fields: [companyId], references: [id])
+  companyId       Int
+  totalItemsPrice Float
+  type            InvoiceType
+  status          InvoiceStatus @default(PENDING)
+  note            String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  client        Client          @relation(fields: [clientId], references: [id])
+  project       Project?        @relation(fields: [projectId], references: [id])
+  InvoicesMedia InvoicesMedia[]
+  items         InvoiceItem[]
+  payment       Payment[]
+
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id            Int      @id @default(autoincrement())
+  itemName      String
+  chargingPrice Float
+  quantity      Int
+  invoiceId     Int
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  Invoice Invoice @relation(fields: [invoiceId], references: [id])
+}
+
+model InvoicesMedia {
+  invoiceId Int
+  mediaId   Int
+
+  media   media   @relation(fields: [mediaId], references: [id])
+  Invoice Invoice @relation(fields: [invoiceId], references: [id])
+
+  @@id([invoiceId, mediaId])
+}
+
+model Sale {
+  id             Int                 @id @default(autoincrement())
+  price          Float
+  posId          Int
+  itemId         Int
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  item           Item                @relation(fields: [itemId], references: [id])
+  specifications SaleSpecification[]
+  inventoryOrPos InventoryAndPos     @relation(fields: [posId], references: [id])
+  company        company             @relation(fields: [companyId], references: [id])
+  companyId      Int
+
+  @@map("sales")
+}
+
+model SaleSpecification {
+  saleId          Int
+  specificationId Int
+  quantity        Int                  @db.UnsignedInt
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  Sale            Sale                 @relation(fields: [saleId], references: [id])
+  Specification   ClothesSpecification @relation(fields: [specificationId], references: [id])
+
+  @@id([saleId, specificationId])
+  @@map("sale_specifications")
+}
+
+model Payment {
+  id          Int      @id @default(autoincrement())
+  invoiceId   Int
+  paymentDate DateTime
+  company     company  @relation(fields: [companyId], references: [id])
+  companyId   Int
+  note        String
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id])
+}
